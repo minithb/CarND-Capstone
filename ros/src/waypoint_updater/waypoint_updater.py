@@ -8,7 +8,7 @@ from geometry_msgs.msg import TwistStamped
 
 import math, sys
 from itertools import islice, cycle
-
+import numpy as np
 '''
 This node will publish waypoints from the car's current position to some `x` distance ahead.
 
@@ -30,38 +30,77 @@ SLOWDOWN_WPS = 50 # Number of waypoints before traffic light to start slowing do
 
 class WaypointUpdater(object):
     def __init__(self):
-        rospy.init_node('waypoint_updater')
+        rospy.init_node('waypoint_updater', log_level=rospy.DEBUG)
 
         rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
         rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
         # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint below
+        #rospy.Subscriber('/traffic_waypoint' Int32, self.traffic_cb)
 
 
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
 
         # TODO: Add other member variables you need below
-        self.waypoints = None
-        self.current_pose = None
+        self.waypoints = None # all waypoints
+        self.waypoints_size = None
+        self.current_pose = None     # 
+        self.final_waypoints = None
         self.current_velocity = None
         self.red_light_wp = -1
         self.last_wp_id = None
         self.next_light_state = None
         self.next_light_wp = None
+        self.max_velocity = 1 # meter/sec
+        self.lookahead_wps = 0
+        self.limit_traffic_ahead = 1 # when closer than these many meters is the light limit it
 
         rospy.spin()
 
+    def send_waypoints(self):
+
+        for ii in range(self.lookahead_wps):
+            # initialize to max velocity 
+            velocity = self.max_velocity
+            #if self.red_light_ahead:
+                #todo
+
+            self.set_waypoint_velocity(self.final_waypoints, ii, velocity)
+
+        self.Publish()
+
+    def Publish(self):
+        l = Lane()
+        l.header = self.waypoints.header
+        l.waypoints = self.final_waypoints
+        self.final_waypoints_pub.publish(l)
+
     #Position updater topic
     def pose_cb(self, msg):
-        self.current_pose = msg.pose
-        #rospy.loginfo(" Waypoint Updater :: Car position %s", self.current_pose)
-        self.send_next_waypoints()
+        ''' 
+          lets return closest points '''
+        dist_func = lambda a, b: math.sqrt((a.x - b.x)**2 + (a.y - b.y)**2)
+        dist = []  # lets find distance of waypoints from current waypoint
+        if self.waypoints:
+            for waypoint in self.waypoints.waypoints:
+                dist.append(dist_func(waypoint.pose.pose.position, msg.pose.position))
+            self.pos_point = np.argmin(dist)
+
+            if self.pos_point + self.lookahead_wps + 1 > self.waypoints_size:
+                list_end = self.pos_point + self.lookahead_wps + 1 - self.waypoints_size 
+                self.final_waypoints = self.waypoints.waypoints[self.pos_point:] + self.waypoints.waypoints[:list_end]
+            else:
+                self.final_waypoints = self.waypoints.waypoints[self.pos_point : self.pos_point + self.lookahead_wps + 1]
+
+            self.send_waypoints()
 
     def waypoints_cb(self, waypoints):
-        if self.waypoints is None:
-            self.waypoints = waypoints.waypoints
-            self.send_next_waypoints()
-        
+        self.waypoints = waypoints
+        self.waypoints_size = np.shape(waypoints.waypoints)[0]
+        self.lookahead_wps = LOOKAHEAD_WPS
+        #rospy.logwarn("# of waypoints ".format(self.waypoints_size))
+        self.max_velocity = self.get_waypoint_velocity(waypoints.waypoints[0])
+        self.limit_traffic_ahead = self.max_velocity
 
     def traffic_cb(self, msg):
         pass
