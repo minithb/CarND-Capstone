@@ -2,9 +2,12 @@
 
 import rospy
 from geometry_msgs.msg import PoseStamped
-from styx_msgs.msg import Lane, Waypoint
+from styx_msgs.msg import Lane, Waypoint, TrafficLight
+from std_msgs.msg import Int32
+from geometry_msgs.msg import TwistStamped
 
-import math
+import math, sys
+from itertools import islice, cycle
 
 '''
 This node will publish waypoints from the car's current position to some `x` distance ahead.
@@ -22,7 +25,8 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
 LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
-
+MAX_SPEED_METERS_PER_SEC = 10*0.447
+SLOWDOWN_WPS = 50 # Number of waypoints before traffic light to start slowing down
 
 class WaypointUpdater(object):
     def __init__(self):
@@ -37,23 +41,32 @@ class WaypointUpdater(object):
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
 
         # TODO: Add other member variables you need below
+        self.waypoints = None
+        self.current_pose = None
+        self.current_velocity = None
+        self.red_light_wp = -1
+        self.last_wp_id = None
+        self.next_light_state = None
+        self.next_light_wp = None
 
         rospy.spin()
 
+    #Position updater topic
     def pose_cb(self, msg):
-        # TODO: Implement
-        pass
+        self.current_pose = msg.pose
+        #rospy.loginfo(" Waypoint Updater :: Car position %s", self.current_pose)
+        self.send_next_waypoints()
 
     def waypoints_cb(self, waypoints):
-        # TODO: Implement
-        pass
+        if self.waypoints is None:
+            self.waypoints = waypoints.waypoints
+            self.send_next_waypoints()
+        
 
     def traffic_cb(self, msg):
-        # TODO: Callback for /traffic_waypoint message. Implement
         pass
 
     def obstacle_cb(self, msg):
-        # TODO: Callback for /obstacle_waypoint message. We will implement it later
         pass
 
     def get_waypoint_velocity(self, waypoint):
