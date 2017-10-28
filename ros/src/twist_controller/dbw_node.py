@@ -3,7 +3,7 @@
 import rospy
 from std_msgs.msg import Bool
 from dbw_mkz_msgs.msg import ThrottleCmd, SteeringCmd, BrakeCmd, SteeringReport
-from geometry_msgs.msg import TwistStamped
+from geometry_msgs.msg import TwistStamped, Vector3, Twist
 import math
 
 from twist_controller import Controller
@@ -57,6 +57,15 @@ class DBWNode(object):
         # self.controller = TwistController(<Arguments you wish to provide>)
 
         # TODO: Subscribe to all the topics you need to
+        rospy.Subscriber('/twist_cmd', TwistStamped, self.twist_cmd_cb)
+        rospy.Subscriber('/current_velocity', TwistStamped, self.current_velocity_cb)
+        rospy.Subscriber('/vehicle/dbw_enabled', Bool, self.dbw_enabled_cb)
+        self.proposed_linear_velocity = Vector3()
+        self.proposed_angular_velocity = Vector3()
+        self.current_linear_velocity = Vector3()
+        self.current_angular_velocity = Vector3()
+        self.current_twist = Twist()
+        self.dbw_enabled = True # simulator mode by default
 
         self.loop()
 
@@ -70,9 +79,23 @@ class DBWNode(object):
             #                                                     <current linear velocity>,
             #                                                     <dbw status>,
             #                                                     <any other argument you need>)
-            # if <dbw is enabled>:
-            #   self.publish(throttle, brake, steer)
+            if self.dbw_enabled:
+                #todo: remove dummy values
+                self.publish(0.3, 0, 0)
+                #self.publish(throttle, brake, steer)
+
             rate.sleep()
+
+    def twist_cmd_cb(self, twist_cmd):
+        self.proposed_linear_velocity = twist_cmd.twist.linear
+        self.proposed_angular_velocity = twist_cmd.twist.angular
+
+    def current_velocity_cb(self, current_velocity_msg):
+        self.current_linear_velocity = current_velocity_msg.twist.linear
+        self.current_angular_velocity = current_velocity_msg.twist.angular
+
+    def dbw_enabled_cb(self, msg):
+        self.dbw_enabled = msg.data
 
     def publish(self, throttle, brake, steer):
         tcmd = ThrottleCmd()
