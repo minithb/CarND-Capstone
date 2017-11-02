@@ -1,7 +1,7 @@
 from styx_msgs.msg import TrafficLight
 
 class TLClassifier(object):
-    def __init__(self):
+    def __init__(self, tl_classifier_cnn_path):
         #TODO load classifier
         pass
 
