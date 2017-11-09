@@ -61,7 +61,7 @@ class TLDetector(object):
 
         self.bridge = CvBridge()
         #Calling the class for classifying the color of the traffic light
-        self.light_classifier = TLClassifier(os.path.dirname(__file__) + traffic_light_classifier)
+        self.light_classifier = TLClassifier()
         self.listener = tf.TransformListener()
         self.loop()
         self.state = TrafficLight.UNKNOWN
