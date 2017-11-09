@@ -1,5 +1,5 @@
 from styx_msgs.msg import TrafficLight
-import pickle 
+import pickle
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
 import numpy as np
@@ -20,13 +20,12 @@ class TLClassifier(object):
         #self.labels = [TrafficLight.NaN, TrafficLight.R, TrafficLight.Y, TrafficLight.G, TrafficLight.NaN]
         #PATH_TO_CKPT = self.model_path + '/checkpoints/frozen_inference_graph.pb'
         # Load LinearSVC Model using load function
-	    self.svc = joblib.load('LinearSVC.pkl')
+	    self.svc = joblib.load('LinearSVC_P2.pkl')
 	    
 	    # Load Scaler using load function
-	    self.X_scaler = joblib.load('LinearScaler.pkl')
+	    self.X_scaler = joblib.load('LinearScaler_P2.pkl')
 	    self.nbins=32
 	    self.bins_range=(0, 256)
-
         #self.graph = tf.Graph()
         #with self.graph.as_default():
         #    gpu_options = tf.GPUOptions(allow_growth=True)
@@ -51,8 +50,8 @@ class TLClassifier(object):
         """
         #TODO implement light color prediction
         #return TrafficLight.UNKNOWN
-		img = image[50:150,190:490]
-    
+        img = image[50:150,190:490]
+
 	    channel1_hist = np.histogram(img[:,:,0], bins=self.nbins, range=self.bins_range)
 	    channel2_hist = np.histogram(img[:,:,1], bins=self.nbins, range=self.bins_range)
 	    channel3_hist = np.histogram(img[:,:,2], bins=self.nbins, range=self.bins_range)
@@ -68,7 +67,6 @@ class TLClassifier(object):
 	        return TrafficLight.YELLOW
 	    else:
 	        return TrafficLight.UNKNOWN
-
         #with self.graph.as_default():
         #    classes = self.sess.run(self.model_output, {
         #        self.input_image: [image]
