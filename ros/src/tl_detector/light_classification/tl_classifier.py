@@ -70,4 +70,5 @@ class TLClassifier(object):
         #    classes = self.sess.run(self.model_output, {
         #        self.input_image: [image]
         #    })[0]
-#    return np.argmax(classes)
+ 
+ 
