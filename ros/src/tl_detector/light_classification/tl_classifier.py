@@ -21,7 +21,7 @@ class TLClassifier(object):
         #self.labels = [TrafficLight.NaN, TrafficLight.R, TrafficLight.Y, TrafficLight.G, TrafficLight.NaN]
         #PATH_TO_CKPT = self.model_path + '/checkpoints/frozen_inference_graph.pb'
         # Load LinearSVC Model using load function
-	    self.svc = joblib.load('LinearSVC.pkl')
+	    self.svc = joblib.load('./LinearSVC.pkl')
 	    
 	    # Load Scaler using load function
 	    self.X_scaler = joblib.load('LinearScaler.pkl')
