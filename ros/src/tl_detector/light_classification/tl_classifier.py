@@ -1,17 +1,6 @@
-from styx_msgs.msg import TrafficLight
-import pickle
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import confusion_matrix
 import numpy as np
-import csv
-import math
 import tensorflow as tf
-from tensorflow.contrib.layers import flatten
-
-from sklearn.svm import LinearSVC
-from sklearn.preprocessing import StandardScaler
-from sklearn.externals import joblib
-
+import cv2
 
 class TLClassifier(object):
     def __init__(self):
@@ -19,13 +8,8 @@ class TLClassifier(object):
         #self.model_path = model_path
         #self.labels = [TrafficLight.NaN, TrafficLight.R, TrafficLight.Y, TrafficLight.G, TrafficLight.NaN]
         #PATH_TO_CKPT = self.model_path + '/checkpoints/frozen_inference_graph.pb'
-        # Load LinearSVC Model using load function
-        self.svc = joblib.load('light_classification/LinearSVC_P2.pkl')
-        
-        # Load Scaler using load function
-        self.X_scaler = joblib.load('light_classification/LinearScaler_P2.pkl')
-        self.nbins=32
-        self.bins_range=(0, 256)
+        self.tf_session = None
+
         #self.graph = tf.Graph()
         #with self.graph.as_default():
         #    gpu_options = tf.GPUOptions(allow_growth=True)
@@ -38,6 +22,15 @@ class TLClassifier(object):
         #    self.model_output = tf.get_default_graph().get_tensor_by_name("model_output:0")
         #pass
 
+    def get_features(self, img):
+        #img = (img*255).astype(np.uint8)
+        img = cv2.resize(img,(224,224))
+        channel1_hist = np.histogram(img[:,:,0], bins=256, range=(0,256))
+        channel2_hist = np.histogram(img[:,:,1], bins=256, range=(0,256))
+        channel3_hist = np.histogram(img[:,:,2], bins=256, range=(0,256))
+        hist_features = [np.concatenate((channel1_hist[0], channel2_hist[0], channel3_hist[0])).reshape(-1,1)]
+        return hist_features
+        
     def get_classification(self, image):
         """Determines the color of the traffic light in the image
 
@@ -50,20 +43,28 @@ class TLClassifier(object):
         """
         #TODO implement light color prediction
         #return TrafficLight.UNKNOWN
-        img = image[50:150,190:490]
-
-        channel1_hist = np.histogram(img[:,:,0], bins=self.nbins, range=self.bins_range)
-        channel2_hist = np.histogram(img[:,:,1], bins=self.nbins, range=self.bins_range)
-        channel3_hist = np.histogram(img[:,:,2], bins=self.nbins, range=self.bins_range)
-        hist_features = np.concatenate((channel1_hist[0], channel2_hist[0], channel3_hist[0]))
-        # Scale features and make a prediction
-        test_features = self.X_scaler.transform(hist_features.reshape(1, -1))
-        test_prediction = self.svc.predict(test_features)
-        if (test_prediction[0] == 0):
+        if self.tf_session is None:
+            # get the traffic light classifier
+            config = tf.ConfigProto(log_device_placement=True)
+            config.gpu_options.per_process_gpu_memory_fraction = 0.2 # don't hog all the VRAM
+            config.operation_timeout_in_ms = 50000 # terminate in 50s if something goes wrong
+            self.tf_session = tf.Session(config=config)
+            saver = tf.train.import_meta_graph('m.meta')
+            saver.restore(self.tf_session, tf.train.latest_checkpoint('./'))
+            
+            # get the tensors we need for doing the predictions by name
+            tf_graph = tf.get_default_graph()
+            self.x = tf_graph.get_tensor_by_name("Placeholder:0")
+            self.logits = tf_graph.get_tensor_by_name("logits:0")
+            
+        pred = self.tf_session.run(self.logits, feed_dict ={self.x: self.get_features(image)})
+        softmax = self.tf_session.run(tf.nn.softmax(pred))
+        prediction = np.argmax(softmax)
+        if (prediction == 0):
             return TrafficLight.RED
-        elif (test_prediction[0] == 1):
+        elif (prediction == 1):
             return TrafficLight.GREEN
-        elif (test_prediction[0] == 2):
+        elif (prediction == 2):
             return TrafficLight.YELLOW
         else:
             return TrafficLight.UNKNOWN
