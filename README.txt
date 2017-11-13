@@ -1,5 +1,5 @@
      NAME        |          E-MAIL            |   SLACK
------------------|-----------------------------------------
+-----------------|----------------------------|------------
 Minith Jain      | minithsatawat@hotmail.com  | @minithjain 
 Mariusz Reichert | mariusz.reichert@gmail.com | @operator 
 Viktor Sokolov   | server321@gmail.com        | @viktorsv
