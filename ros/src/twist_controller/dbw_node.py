@@ -9,6 +9,7 @@ import math
 
 from twist_controller import Controller
 
+LOG_RATE = 4
 
 '''
 You can build this node only after you have built (or partially built) the `waypoint_updater` node.
@@ -80,8 +81,8 @@ class DBWNode(object):
                                      max_lat_accel = self.max_lat_accel,
                                      max_steer_angle = self.max_steer_angle)
         # Subscribe to all the topics you need to
-        rospy.Subscriber('/twist_cmd', TwistStamped, self.twist_cmd_cb, queue_size=5)
-        rospy.Subscriber('/current_velocity', TwistStamped, self.current_velocity_cb, queue_size=5)
+        rospy.Subscriber('/twist_cmd', TwistStamped, self.twist_cmd_cb, queue_size=1)
+        rospy.Subscriber('/current_velocity', TwistStamped, self.current_velocity_cb, queue_size=1)
         rospy.Subscriber('/vehicle/dbw_enabled', Bool, self.dbw_enabled_cb, queue_size=1)
 
         self.loop()
@@ -99,7 +100,7 @@ class DBWNode(object):
         self.latest_twist_cmd = twist_cmd
 
     def loop(self):
-        rate = rospy.Rate(50) #Hz
+        rate = rospy.Rate(10) #Hz
         while not rospy.is_shutdown():
 
             # TIME
@@ -119,12 +120,12 @@ class DBWNode(object):
                     del_time=del_time)
                 print (throttle)
                 self.publish(throttle, brake, steering)
-                rospy.loginfo("Test")
             else:
                 self.reset_flag = True
             rate.sleep()
 
     def publish(self, throttle, brake, steer):
+        rospy.logwarn_throttle(LOG_RATE, "[DBW] Commanding throttle: {}, brake: {}, steering {}".format(throttle, brake, steer))
         tcmd = ThrottleCmd()
         tcmd.enable = True
         tcmd.pedal_cmd_type = ThrottleCmd.CMD_PERCENT
