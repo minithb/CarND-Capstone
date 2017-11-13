@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import cv2
+from styx_msgs.msg import TrafficLight
 
 class TLClassifier(object):
     def __init__(self):
@@ -49,8 +50,8 @@ class TLClassifier(object):
             config.gpu_options.per_process_gpu_memory_fraction = 0.2 # don't hog all the VRAM
             config.operation_timeout_in_ms = 50000 # terminate in 50s if something goes wrong
             self.tf_session = tf.Session(config=config)
-            saver = tf.train.import_meta_graph('m.meta')
-            saver.restore(self.tf_session, tf.train.latest_checkpoint('./'))
+            saver = tf.train.import_meta_graph('light_classification/m.meta')
+            saver.restore(self.tf_session, tf.train.latest_checkpoint('./light_classification/'))
             
             # get the tensors we need for doing the predictions by name
             tf_graph = tf.get_default_graph()
