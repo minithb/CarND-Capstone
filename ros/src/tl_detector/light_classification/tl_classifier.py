@@ -24,7 +24,7 @@ class TLClassifier(object):
         #pass
 
     def get_features(self, img):
-        #img = (img*255).astype(np.uint8)
+        #img = (img*255).astype(np.uint8) # For png images
         img = cv2.resize(img,(224,224))
         channel1_hist = np.histogram(img[:,:,0], bins=256, range=(0,256))
         channel2_hist = np.histogram(img[:,:,1], bins=256, range=(0,256))
@@ -50,9 +50,12 @@ class TLClassifier(object):
             config.gpu_options.per_process_gpu_memory_fraction = 0.2 # don't hog all the VRAM
             config.operation_timeout_in_ms = 50000 # terminate in 50s if something goes wrong
             self.tf_session = tf.Session(config=config)
-            saver = tf.train.import_meta_graph('light_classification/m.meta')
-            saver.restore(self.tf_session, tf.train.latest_checkpoint('./light_classification/'))
-            
+            # Classifier for simulator
+            saver = tf.train.import_meta_graph('light_classification/m/m.meta')
+            saver.restore(self.tf_session, tf.train.latest_checkpoint('./light_classification/m/'))
+            # Classifier for Carla
+            #saver = tf.train.import_meta_graph('light_classification/carla/carla.meta')
+            #saver.restore(self.tf_session, tf.train.latest_checkpoint('./light_classification/carla/'))            
             # get the tensors we need for doing the predictions by name
             tf_graph = tf.get_default_graph()
             self.x = tf_graph.get_tensor_by_name("Placeholder:0")

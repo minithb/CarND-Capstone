@@ -100,7 +100,7 @@ class DBWNode(object):
         self.latest_twist_cmd = twist_cmd
 
     def loop(self):
-        rate = rospy.Rate(10) #Hz
+        rate = rospy.Rate(50) #Hz #For Carla: 50 Hz #For Simulator: 10Hz
         while not rospy.is_shutdown():
 
             # TIME
