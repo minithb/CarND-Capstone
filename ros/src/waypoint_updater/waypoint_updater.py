@@ -118,6 +118,7 @@ class WaypointUpdater(object):
         if (msg.data >= 0):
             self.traffic_point = msg.data
             self.wrn_rot_licht = True
+            self.send_waypoints()
         else:
             self.traffic_point = None
             self.wrn_rot_licht = False
