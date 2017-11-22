@@ -23,9 +23,8 @@ import yaml
 import math
 
 
-STATE_COUNT_THRESHOLD = 3
+STATE_COUNT_THRESHOLD = 2
 classes= ['Red', 'Yellow', 'Green','Null']
-Show_img = False
 traffic_light_classifier = '/traffic_light_classifier/cnn'
 
 class TLDetector(object):
@@ -39,7 +38,7 @@ class TLDetector(object):
         self.lights = []
 
         sub1 = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
-        sub2 = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
+        self.sub2 = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
         '''
         /vehicle/traffic_lights provides you with the location of the traffic light in 3D map space and
@@ -50,6 +49,7 @@ class TLDetector(object):
         '''
         sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb)
         sub6 = rospy.Subscriber('/image_color', Image, self.image_cb, queue_size = 1)
+        sub7 = rospy.Subscriber('/image_raw', Image, self.image_cb, queue_size=1)
         '''
         The permanent (x, y) coordinates for each traffic light's stop line are provided
         by the config dictionary, which is imported from the traffic_light_config file:
@@ -67,7 +67,7 @@ class TLDetector(object):
         self.last_state = TrafficLight.UNKNOWN
         self.last_wp = -1
         self.state_count = 0
-
+        self.image_index = 0
         rospy.spin()
 
     def pose_cb(self, msg):
@@ -75,7 +75,7 @@ class TLDetector(object):
 
     def waypoints_cb(self, waypoints):
         self.waypoints = waypoints
-
+        self.sub2.unregister()
     def traffic_cb(self, msg):
         self.lights = msg.lights
 
@@ -87,6 +87,10 @@ class TLDetector(object):
             msg (Image): image from car-mounted camera
 
         """
+        self.image_index += 1
+        if self.image_index % 5 != 1:
+            print('--- ignoring image')
+            return
         self.has_image = True
         self.camera_image = msg
     #loop through to capture all states
