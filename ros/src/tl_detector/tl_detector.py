@@ -22,6 +22,7 @@ import cv2
 import yaml
 import math
 
+LOG_RATE = 4
 
 STATE_COUNT_THRESHOLD = 2
 classes= ['Red', 'Yellow', 'Green','Null']
@@ -37,8 +38,10 @@ class TLDetector(object):
         self.has_image = False
         self.lights = []
 
-        sub1 = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
-        self.sub2 = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
+        #sub1 = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
+        #self.sub2 = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
+        sub1 = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb, queue_size = 1)
+        sub2 = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb, queue_size = 1)
 
         '''
         /vehicle/traffic_lights provides you with the location of the traffic light in 3D map space and
@@ -47,7 +50,7 @@ class TLDetector(object):
         simulator. When testing on the vehicle, the color state will not be available. You'll need to
         rely on the position of the light and the camera image to predict it.
         '''
-        sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb)
+        sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb, queue_size = 1)
         sub6 = rospy.Subscriber('/image_color', Image, self.image_cb, queue_size = 1)
         sub7 = rospy.Subscriber('/image_raw', Image, self.image_cb, queue_size=1)
         '''
@@ -62,13 +65,16 @@ class TLDetector(object):
         #Calling the class for classifying the color of the traffic light
         self.light_classifier = TLClassifier()
         self.listener = tf.TransformListener()
-        self.loop()
         self.state = TrafficLight.UNKNOWN
-        self.last_state = TrafficLight.UNKNOWN
-        self.last_wp = -1
-        self.state_count = 0
-        self.image_index = 0
-        rospy.spin()
+
+        #self.last_state = TrafficLight.UNKNOWN
+        #self.last_wp = -1
+        #self.state_count = 0
+        #self.image_index = 0
+        #rospy.spin()
+
+        self.red_state_count = 0
+        self.loop()
 
     def pose_cb(self, msg):
         self.pose = msg
@@ -103,46 +109,44 @@ class TLDetector(object):
         rate = rospy.Rate(10) #hz
         while not rospy.is_shutdown():
             if(not self.has_image):
-                rospy.loginfo("Images aren't seen")
+                rospy.logwarn_throttle(LOG_RATE, "[TLD] Images aren't seen")
                 continue
             light_wp, state = self.process_traffic_lights()
+
+            if self.state != state:
+                rospy.logwarn_throttle(LOG_RATE, "[TLD] State update from {} to {}".format(self.state, state))
+            self.state = state
+                
             if state == None:
-                rospy.loginfo("The state is None")
+                rospy.logwarn_throttle(LOG_RATE, "[TLD] The state is None")
+                rate.sleep()
                 continue
 
-        '''
-        Publish upcoming red lights at camera frequency.
-        Each predicted state has to occur `STATE_COUNT_THRESHOLD` number
-        of times till we start using it. Otherwise the previous stable state is
-        used.
-        '''
-        light_distance = 0
-        if self.state != state:
-            self.state_count = 0
-            self.state = state
-        elif self.state_count >= STATE_COUNT_THRESHOLD:
-            self.last_state = self.state
-            light_wp = light_wp if state == TrafficLight.RED else -1
-            self.last_wp = light_wp
-############################################################################
-            if(self.light_wp != -1):
-                #check if there are upcoming traffic lights, see the explination id readme for more details
-                light_distance = self.pose_distance(self.pose.pose,self.waypoints.waypoints[self.last_wp].pose.pose)    
-                rospy.loginfo("Distance to traffic light 0.3f\n", light_distance)
-            else:
-                rospy.loginfo("No upcoming lights")
-############################################################################
-            self.upcoming_red_light_pub.publish(Int32(light_wp))
-        else:
-            if(self.light_wp != -1):
-                #check if there are upcoming traffic lights, see the explination id readme for more details
-                light_distance = self.pose_distance(self.pose.pose,self.waypoints.waypoints[self.last_wp].pose.pose)    
-                rospy.loginfo("Distance to traffic light 0.3f\n", light_distance)
-            else:
-                rospy.loginfo("No upcoming lights")
+            if light_wp <= 0:
+                rospy.logwarn_throttle(LOG_RATE, "[TLD] Light wp index is 0")
+                rate.sleep()
+                continue
 
-            self.upcoming_red_light_pub.publish(Int32(self.last_wp))
-        self.state_count += 1
+            
+            '''
+            Publish upcoming red lights at camera frequency.
+            Each predicted state has to occur `STATE_COUNT_THRESHOLD` number
+            of times till we start using it. Otherwise the previous stable state is
+            used.
+            '''
+            if state != TrafficLight.RED:
+                self.red_state_count = 0
+            else:
+                self.red_state_count += 1
+            
+            if self.red_state_count >= STATE_COUNT_THRESHOLD:
+                rospy.logwarn_throttle(LOG_RATE, "[TLD] Publishing detected lights at wp {}".format(light_wp))
+                self.upcoming_red_light_pub.publish(Int32(light_wp))
+            else:
+                rospy.logwarn_throttle(LOG_RATE, "[TLD] Publishing red light not detected")
+                self.upcoming_red_light_pub.publish(Int32(-1))
+            
+            rate.sleep()
 #Utility functions
 #############################################################################
     def pose_distance(self, pose_from, pose_to):
@@ -194,7 +198,7 @@ class TLDetector(object):
                 if(distance < min_distance):
                     min_distance = distance
                     min_index = index
-            rospy.loginfo("Closest waypoint %s\n at distance  %s\n", index, min_distance)
+            rospy.logwarn_throttle(LOG_RATE, "[TLD] Closest waypoint {}\n at distance  {}\n".format(min_index, min_distance))
             return min_index
         return 0
     def get_closest_traffic_light(self, pose, light_positions):
@@ -224,7 +228,7 @@ class TLDetector(object):
                 if(distance < min_distance and self.is_waypoint_in_front_of_vehicle(traffic_light.pose.pose,pose)):
                     min_distance = distance
                     min_light = traffic_light
-            rospy.loginfo("Closest traffic light %s\n at distance  %s\n", traffic_light, min_distance)
+
             return min_light,min_distance
         return None
     def is_waypoint_in_front_of_vehicle(self,waypoint,pose):
@@ -241,6 +245,7 @@ class TLDetector(object):
         vec_dist =  math.sqrt((waypoint.position.x-pose.position.x - x_vec*0.1)**2 + (waypoint.position.y-pose.position.y - y_vec*0.1)**2)
 
         return vec_dist < waypoint_dist
+
     def get_light_state(self, light):
         """Determines the current color of the traffic light
 
@@ -251,11 +256,10 @@ class TLDetector(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
-        if(not self.has_image):
-            self.prev_light_loc = None
-            return False
+        if(not self.has_image or self.light_classifier == None):
+            return TrafficLight.UNKNOWN
 
-        cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
+        cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "rgb8")
         
         ##Sanity check ans resize
         if cv_image.size != (800,600,3):
@@ -267,14 +271,9 @@ class TLDetector(object):
         ########################################################
         ############ Under construction ########################
         ########################################################
-        if self.light_classifier == None:
-            classification = TrafficLight.UNKNOWN
-        else:
-
-
-
-        ########################################################
-            return self.light_classifier.get_classification(cv_image)
+        classification = self.light_classifier.get_classification(cv_image)
+        rospy.logwarn_throttle(LOG_RATE, "[TLD] classifying traffic light on frame as: {}".format(classification))
+        return classification
 
     def process_traffic_lights(self):
         """Finds closest visible traffic light, if one exists, and determines its
@@ -290,16 +289,13 @@ class TLDetector(object):
         # List of positions that correspond to the line to stop in front of for a given intersection
         stop_line_positions = self.config['stop_line_positions']
         if(self.pose):
-            #car_position = self.get_closest_waypoint(self.pose.pose)
              light, light_distance = self.get_closest_traffic_light(self.pose.pose, stop_line_positions)
         #TODO find the closest visible traffic light (if one exists)
 
-        if light:
-            #state = self.get_light_state(light)
-            #return light_wp, state
+        if light != None and light_distance < 200.0:
             light_index = self.get_closest_waypoint(light.pose.pose)
             state = self.get_light_state(light)
-            rospy.loginfo("Closest Light at %0.2fm is Red? %s\n", light_distance, (state==TrafficLight.RED))
+            rospy.logwarn_throttle(LOG_RATE, "[TLD] Closest Light at {}m is Red? {}\n".format(light_distance, (state==TrafficLight.RED)))
             return light_index, state
         self.waypoints = None
         return -1, TrafficLight.UNKNOWN

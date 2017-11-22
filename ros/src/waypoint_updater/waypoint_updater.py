@@ -28,15 +28,17 @@ LOOKAHEAD_WPS = 100 # Number of waypoints we will publish.
 MAX_SPEED_METERS_PER_SEC = 10*0.447
 SLOWDOWN_WPS = 50 # Number of waypoints before traffic light to start slowing down
 
+LOG_RATE = 4
+
 class WaypointUpdater(object):
     def __init__(self):
         rospy.init_node('waypoint_updater', log_level=rospy.DEBUG)
 
-        rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
-        rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
+        rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb, queue_size=1)
+        rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb, queue_size=1)
 
         # TODO: Add a subscriber for /traffic_waypoint 
-        rospy.Subscriber('/traffic_waypoint', Int32, self.traffic_cb)
+        rospy.Subscriber('/traffic_waypoint', Int32, self.traffic_cb, queue_size=1)
 
 
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
@@ -54,6 +56,8 @@ class WaypointUpdater(object):
         self.next_light_wp = None
         self.max_velocity = 1 # meter/sec
         self.lookahead_wps = 0
+        self.traffic_point = None
+        self.pos_point = None
         self.limit_traffic_ahead = 1 # when closer than these many meters is the light limit it
 
         rospy.spin()
@@ -63,7 +67,7 @@ class WaypointUpdater(object):
         for ii in range(self.lookahead_wps):
             # initialize to max velocity 
             velocity = self.max_velocity
-            if self.wrn_rot_licht:
+            if self.wrn_rot_licht and self.traffic_point != None:
                 point_von_licht = self.traffic_point - self.pos_point
                 chk_licht_pt = (ii < point_von_licht) & (point_von_licht > 1) & (point_von_licht < self.lookahead_wps)
                 if chk_licht_pt:
@@ -104,15 +108,17 @@ class WaypointUpdater(object):
         self.waypoints = waypoints
         self.waypoints_size = np.shape(waypoints.waypoints)[0]
         self.lookahead_wps = min(LOOKAHEAD_WPS, self.waypoints_size//2)
-        rospy.logwarn("# of waypoints ".format(self.waypoints_size))
+        rospy.logwarn("[WPU] # of waypoints ".format(self.waypoints_size))
         self.max_velocity = self.get_waypoint_velocity(waypoints.waypoints[0])
         self.limit_traffic_ahead = self.max_velocity
 
     def traffic_cb(self, msg):
+        rospy.logwarn_throttle(LOG_RATE, "[WPU] received red traffic light index: {}".format(msg.data))
         # Read data from msg and mark as traffic points
         if (msg.data >= 0):
             self.traffic_point = msg.data
             self.wrn_rot_licht = True
+            self.send_waypoints()
         else:
             self.traffic_point = None
             self.wrn_rot_licht = False
